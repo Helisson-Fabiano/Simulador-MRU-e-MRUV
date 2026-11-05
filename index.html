@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador MRUV</title>
+    <title>Simulador MRU e MRUV</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -47,6 +47,20 @@
             user-select: none;
             touch-action: none;
             z-index: 30;
+            transition: filter 0.15s ease;
+        }
+        .car-entity:hover {
+            filter: brightness(1.08);
+        }
+        .car-entity:active, .car-entity.dragging {
+            cursor: grabbing;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.25));
+            z-index: 40;
+        }
+        .car-entity:focus-visible {
+            outline: 3px solid #0f172a;
+            outline-offset: 4px;
+            border-radius: 6px;
         }
         .car-badge {
             position: absolute;
@@ -134,7 +148,7 @@
             <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-md shadow-blue-500/20" aria-hidden="true">
                 M
             </div>
-            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Simulador MRUV Acessível</h1>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Simulador MRU e MRUV</h1>
         </div>
 
         <div class="flex flex-wrap items-center justify-center gap-3 w-full lg:w-auto">
@@ -165,7 +179,7 @@
             <div class="flex flex-col bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner">
                 <label for="input-current-time" class="text-[9px] font-black uppercase text-blue-700 px-1 mb-0.5 tracking-wider">Tempo Atual</label>
                 <div class="flex items-center bg-white rounded-lg border border-slate-300 px-2 py-0.5 focus-within:ring-2 focus-within:ring-blue-500">
-                    <input type="number" id="input-current-time" aria-label="Tempo atual da simulação em segundos" value="0.0" min="0" step="0.1" class="w-20 text-sm font-black mono-num text-slate-800 bg-transparent outline-none text-right pr-1">
+                    <input type="number" id="input-current-time" aria-label="Tempo atual da simulação" value="0.0" min="0" step="0.1" class="w-20 text-sm font-black mono-num text-slate-800 bg-transparent outline-none text-right pr-1">
                     <span class="lbl-time-unit text-xs font-bold text-slate-500" aria-hidden="true">s</span>
                 </div>
             </div>
@@ -184,10 +198,10 @@
 
     <!-- Simulation Track Viewport -->
     <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5 flex flex-col gap-3 relative" aria-labelledby="track-heading">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between flex-wrap gap-2">
             <h2 id="track-heading" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
-                Pista Interativa de Movimento
+                Pista Interativa (Arraste os carrinhos ou use as setas do teclado)
             </h2>
             <span id="txt-status-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200" role="status">
                 Aguardando início
@@ -203,8 +217,8 @@
             <!-- LANE A -->
             <div class="absolute top-0 left-0 w-full h-[80px] pointer-events-none">
                 <span class="absolute top-2 left-3 text-[10px] font-extrabold text-blue-500 tracking-wider">FAIXA A</span>
-                <div id="entity-car-a" class="car-entity pointer-events-auto" style="top: 26px; left: 20%;" tabindex="0" aria-label="Carrinho A na faixa superior">
-                    <div class="car-badge bg-blue-600 text-white border-2 border-white shadow">A</div>
+                <div id="entity-car-a" class="car-entity pointer-events-auto" style="top: 26px; left: 20%;" tabindex="0" role="slider" aria-label="Carrinho A na pista (arraste ou use as setas para mudar a posição)" aria-valuenow="0">
+                    <div id="badge-car-a" class="car-badge bg-blue-600 text-white border-2 border-white shadow">A</div>
                     <div class="w-full h-full relative" aria-hidden="true">
                         <div class="absolute bottom-1 w-full h-4 bg-blue-600 rounded-md shadow-md"></div>
                         <div class="absolute bottom-4 left-2 w-7 h-3 bg-blue-400 rounded-t-sm"></div>
@@ -220,8 +234,8 @@
             <!-- LANE B -->
             <div class="absolute top-[84px] left-0 w-full h-[82px] pointer-events-none">
                 <span class="absolute top-2 left-3 text-[10px] font-extrabold text-red-500 tracking-wider">FAIXA B</span>
-                <div id="entity-car-b" class="car-entity pointer-events-auto" style="top: 26px; left: 60%;" tabindex="0" aria-label="Carrinho B na faixa inferior">
-                    <div class="car-badge bg-red-600 text-white border-2 border-white shadow">B</div>
+                <div id="entity-car-b" class="car-entity pointer-events-auto" style="top: 26px; left: 60%;" tabindex="0" role="slider" aria-label="Carrinho B na pista (arraste ou use as setas para mudar a posição)" aria-valuenow="100">
+                    <div id="badge-car-b" class="car-badge bg-red-600 text-white border-2 border-white shadow">B</div>
                     <div class="w-full h-full relative" aria-hidden="true">
                         <div class="absolute bottom-1 w-full h-4 bg-red-600 rounded-md shadow-md"></div>
                         <div class="absolute bottom-4 left-2 w-7 h-3 bg-red-400 rounded-t-sm"></div>
@@ -235,7 +249,7 @@
             <div id="ruler-strip" aria-hidden="true"></div>
         </div>
 
-        <!-- Instant Telemetry Summary Bar (aria-live para leitura acessível sem poluição excessiva) -->
+        <!-- Instant Telemetry Summary Bar -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1" aria-live="polite" aria-atomic="true">
             <div class="bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -465,6 +479,7 @@
     let maxTime = null;
     let animFrameId = null;
     let lastFrameTimestamp = null;
+    let activeDragCar = null; // 'A' ou 'B'
 
     let camera = { min: -20, max: 120 };
 
@@ -483,6 +498,8 @@
         originGuide: document.getElementById('origin-vertical-guide'),
         carAEntity: document.getElementById('entity-car-a'),
         carBEntity: document.getElementById('entity-car-b'),
+        badgeCarA: document.getElementById('badge-car-a'),
+        badgeCarB: document.getElementById('badge-car-b'),
         telemSA: document.getElementById('telem-sa'),
         telemVA: document.getElementById('telem-va'),
         telemSB: document.getElementById('telem-sb'),
@@ -593,6 +610,8 @@
     }
 
     function updateCameraBounds(forceReset = false) {
+        if (activeDragCar && !forceReset) return; // Evita que a câmera pule enquanto o usuário arrasta
+
         const minPos = Math.min(0, carA.s, carB.s);
         const maxPos = Math.max(0, carA.s, carB.s);
         const span = maxPos - minPos;
@@ -679,6 +698,9 @@
         DOM.carAEntity.style.left = `${pctA}%`;
         DOM.carBEntity.style.left = `${pctB}%`;
 
+        DOM.carAEntity.setAttribute('aria-valuenow', carA.s.toFixed(1));
+        DOM.carBEntity.setAttribute('aria-valuenow', carB.s.toFixed(1));
+
         DOM.telemSA.innerText = carA.s.toFixed(2);
         DOM.telemVA.innerText = carA.v.toFixed(2);
         DOM.telemSB.innerText = carB.s.toFixed(2);
@@ -754,14 +776,20 @@
         currentUnit = newUnit;
 
         if (oldUnit === 'si' && newUnit === 'kmh') {
-            carA.s0 /= 1000; carB.s0 /= 1000;
-            carA.v0 *= 3.6; carB.v0 *= 3.6;
-            carA.a *= 12960; carB.a *= 12960;
+            carA.s0 = parseFloat((carA.s0 / 1000).toFixed(2));
+            carB.s0 = parseFloat((carB.s0 / 1000).toFixed(2));
+            carA.v0 = parseFloat((carA.v0 * 3.6).toFixed(1));
+            carB.v0 = parseFloat((carB.v0 * 3.6).toFixed(1));
+            carA.a = parseFloat((carA.a * 12960).toFixed(0));
+            carB.a = parseFloat((carB.a * 12960).toFixed(0));
             simTime /= 3600; if (maxTime !== null) maxTime /= 3600;
         } else if (oldUnit === 'kmh' && newUnit === 'si') {
-            carA.s0 *= 1000; carB.s0 *= 1000;
-            carA.v0 /= 3.6; carB.v0 /= 3.6;
-            carA.a /= 12960; carB.a /= 12960;
+            carA.s0 = parseFloat((carA.s0 * 1000).toFixed(1));
+            carB.s0 = parseFloat((carB.s0 * 1000).toFixed(1));
+            carA.v0 = parseFloat((carA.v0 / 3.6).toFixed(1));
+            carB.v0 = parseFloat((carB.v0 / 3.6).toFixed(1));
+            carA.a = parseFloat((carA.a / 12960).toFixed(1));
+            carB.a = parseFloat((carB.a / 12960).toFixed(1));
             simTime *= 3600; if (maxTime !== null) maxTime *= 3600;
         }
 
@@ -817,6 +845,108 @@
             setterCallback(parseFloat(e.target.value));
             readInputsToState();
         });
+    }
+
+    // --- LÓGICA DE ARRASTAR OS CARRINHOS (MOUSE, TOUCH E TECLADO) ---
+    function setupCarDragging() {
+        const startDrag = (carKey, e) => {
+            e.preventDefault();
+            if (isRunning) setPlayState(false);
+            activeDragCar = carKey;
+            const entity = carKey === 'A' ? DOM.carAEntity : DOM.carBEntity;
+            entity.classList.add('dragging');
+            DOM.statusBadge.innerText = `Arrastando Carrinho ${carKey}...`;
+        };
+
+        const onMove = (clientX) => {
+            if (!activeDragCar) return;
+            const rect = DOM.trackViewport.getBoundingClientRect();
+            let pct = (clientX - rect.left) / rect.width;
+            pct = Math.max(0.02, Math.min(0.98, pct)); // Mantém dentro da pista visível
+
+            const range = camera.max - camera.min;
+            const targetS = camera.min + pct * range;
+            const step = UNITS_CONFIG[currentUnit].limits.s.step;
+            const limits = UNITS_CONFIG[currentUnit].limits.s;
+            const unitDist = UNITS_CONFIG[currentUnit].dist;
+
+            if (activeDragCar === 'A') {
+                let newS0 = computeReverseInitialPosition(carA, targetS, simTime);
+                newS0 = Math.round(newS0 / step) * step;
+                newS0 = Math.max(limits.min, Math.min(limits.max, parseFloat(newS0.toFixed(2))));
+                carA.s0 = newS0;
+                DOM.numS0A.value = newS0;
+                DOM.inputS0A.value = newS0;
+                DOM.badgeCarA.innerText = `A: ${targetS.toFixed(currentUnit === 'kmh' ? 1 : 0)}${unitDist}`;
+            } else {
+                let newS0 = computeReverseInitialPosition(carB, targetS, simTime);
+                newS0 = Math.round(newS0 / step) * step;
+                newS0 = Math.max(limits.min, Math.min(limits.max, parseFloat(newS0.toFixed(2))));
+                carB.s0 = newS0;
+                DOM.numS0B.value = newS0;
+                DOM.inputS0B.value = newS0;
+                DOM.badgeCarB.innerText = `B: ${targetS.toFixed(currentUnit === 'kmh' ? 1 : 0)}${unitDist}`;
+            }
+
+            updateScenePositions();
+            rebuildChartsHistory();
+        };
+
+        const endDrag = () => {
+            if (!activeDragCar) return;
+            const entity = activeDragCar === 'A' ? DOM.carAEntity : DOM.carBEntity;
+            entity.classList.remove('dragging');
+            DOM.badgeCarA.innerText = 'A';
+            DOM.badgeCarB.innerText = 'B';
+            const finishedCar = activeDragCar;
+            activeDragCar = null;
+            updateCameraBounds(false);
+            updateScenePositions();
+            DOM.statusBadge.innerText = `Posição do Carrinho ${finishedCar} ajustada.`;
+        };
+
+        // Eventos de Mouse
+        DOM.carAEntity.addEventListener('mousedown', (e) => startDrag('A', e));
+        DOM.carBEntity.addEventListener('mousedown', (e) => startDrag('B', e));
+        window.addEventListener('mousemove', (e) => { if (activeDragCar) onMove(e.clientX); });
+        window.addEventListener('mouseup', endDrag);
+
+        // Eventos de Toque (Celular/Tablet)
+        DOM.carAEntity.addEventListener('touchstart', (e) => startDrag('A', e), { passive: false });
+        DOM.carBEntity.addEventListener('touchstart', (e) => startDrag('B', e), { passive: false });
+        window.addEventListener('touchmove', (e) => {
+            if (activeDragCar && e.touches.length > 0) {
+                onMove(e.touches[0].clientX);
+            }
+        }, { passive: false });
+        window.addEventListener('touchend', endDrag);
+
+        // Eventos de Teclado (Acessibilidade para mover o carrinho com Setas)
+        const handleKeyDrag = (carKey, e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            if (isRunning) setPlayState(false);
+
+            const step = UNITS_CONFIG[currentUnit].limits.s.step * (e.shiftKey ? 5 : 1);
+            const delta = e.key === 'ArrowRight' ? step : -step;
+            const limits = UNITS_CONFIG[currentUnit].limits.s;
+
+            if (carKey === 'A') {
+                carA.s0 = Math.max(limits.min, Math.min(limits.max, parseFloat((carA.s0 + delta).toFixed(2))));
+                DOM.numS0A.value = carA.s0;
+                DOM.inputS0A.value = carA.s0;
+            } else {
+                carB.s0 = Math.max(limits.min, Math.min(limits.max, parseFloat((carB.s0 + delta).toFixed(2))));
+                DOM.numS0B.value = carB.s0;
+                DOM.inputS0B.value = carB.s0;
+            }
+            updateScenePositions();
+            rebuildChartsHistory();
+            DOM.statusBadge.innerText = `Posição inicial do Carrinho ${carKey} alterada via teclado.`;
+        };
+
+        DOM.carAEntity.addEventListener('keydown', (e) => handleKeyDrag('A', e));
+        DOM.carBEntity.addEventListener('keydown', (e) => handleKeyDrag('B', e));
     }
 
     function setPlayState(play) {
@@ -927,6 +1057,8 @@
         bindDualInput(DOM.inputV0B, DOM.numV0B, (v) => carB.v0 = v);
         bindDualInput(DOM.inputAB, DOM.numAB, (v) => carB.a = v);
         DOM.modeB.addEventListener('change', (e) => { carB.mode = e.target.value; readInputsToState(); });
+
+        setupCarDragging();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
