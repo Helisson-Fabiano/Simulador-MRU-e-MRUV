@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador MRUV Acessível</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+        .mono-num {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 9999px;
+            background: #cbd5e1;
+            outline: none;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            cursor: grab;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        }
+        .slider-blue::-webkit-slider-thumb { background: #2563eb; }
+        .slider-red::-webkit-slider-thumb { background: #dc2626; }
+        
+        .car-entity {
+            position: absolute;
+            transform: translateX(-50%);
+            width: 58px;
+            height: 28px;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            z-index: 30;
+        }
+        .car-badge {
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 18px;
+            min-width: 22px;
+            padding: 0 6px;
+            font-size: 11px;
+            font-weight: 900;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #ruler-strip {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 52px;
+            background: #f1f5f9;
+            border-top: 2px solid #cbd5e1;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .ruler-tick {
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 8px;
+            background-color: #94a3b8;
+        }
+        .ruler-tick.major {
+            height: 14px;
+            width: 2px;
+            background-color: #64748b;
+        }
+        .ruler-tick.zero-tick {
+            height: 18px;
+            width: 3px;
+            background-color: #16a34a;
+            z-index: 20;
+        }
+        .ruler-label {
+            position: absolute;
+            top: 18px;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: nowrap;
+        }
+        .ruler-label.zero-label {
+            color: #15803d;
+            font-size: 12px;
+            font-weight: 900;
+            background: rgba(220, 252, 231, 0.95);
+            padding: 1px 5px;
+            border-radius: 4px;
+            border: 1px solid #86efac;
+            top: 16px;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] { -moz-appearance: textfield; }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+
+<div class="max-w-7xl mx-auto w-full flex flex-col gap-6" role="main">
+    
+    <!-- Header & Global Controls Bar -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-md shadow-blue-500/20" aria-hidden="true">
+                M
+            </div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Simulador MRUV Acessível</h1>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-3 w-full lg:w-auto">
+            
+            <!-- Unit Switcher -->
+            <div class="flex flex-col bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+                <label for="select-units" class="text-[9px] font-black uppercase text-slate-500 px-1 mb-0.5 tracking-wider">Unidades de Medida</label>
+                <select id="select-units" aria-label="Selecione o sistema de unidades" class="bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 py-1.5 px-2.5 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500">
+                    <option value="si">SI (m, s, m/s, m/s²)</option>
+                    <option value="kmh">KM/H (km, h, km/h, km/h²)</option>
+                </select>
+            </div>
+
+            <!-- Simulation Action Buttons -->
+            <div class="flex items-end gap-2">
+                <button id="btn-play" aria-label="Iniciar ou pausar simulação" class="h-11 px-5 rounded-xl font-black text-sm text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-all flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
+                    <span>▶ Iniciar</span>
+                </button>
+                
+                <button id="btn-reset" aria-label="Resetar simulação para valores iniciais" class="h-11 px-4 rounded-xl font-bold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 focus:ring-4 focus:ring-slate-300 transition-all flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span>↺ Resetar</span>
+                </button>
+            </div>
+
+            <!-- Time Scrubber -->
+            <div class="flex flex-col bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+                <label for="input-current-time" class="text-[9px] font-black uppercase text-blue-700 px-1 mb-0.5 tracking-wider">Tempo Atual</label>
+                <div class="flex items-center bg-white rounded-lg border border-slate-300 px-2 py-0.5 focus-within:ring-2 focus-within:ring-blue-500">
+                    <input type="number" id="input-current-time" aria-label="Tempo atual da simulação em segundos" value="0.0" min="0" step="0.1" class="w-20 text-sm font-black mono-num text-slate-800 bg-transparent outline-none text-right pr-1">
+                    <span class="lbl-time-unit text-xs font-bold text-slate-500" aria-hidden="true">s</span>
+                </div>
+            </div>
+
+            <!-- Max Time / Duration Input -->
+            <div class="flex flex-col bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+                <label for="input-max-time" class="text-[9px] font-black uppercase text-amber-700 px-1 mb-0.5 tracking-wider">Tempo Máx.</label>
+                <div class="flex items-center bg-white rounded-lg border border-slate-300 px-2 py-0.5 focus-within:ring-2 focus-within:ring-amber-500">
+                    <input type="number" id="input-max-time" aria-label="Tempo máximo de duração da simulação" placeholder="Infinito" min="0.1" step="1" class="w-20 text-sm font-black mono-num text-amber-800 bg-transparent outline-none text-right pr-1">
+                    <span class="lbl-time-unit text-xs font-bold text-slate-500" aria-hidden="true">s</span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Simulation Track Viewport -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5 flex flex-col gap-3 relative" aria-labelledby="track-heading">
+        <div class="flex items-center justify-between">
+            <h2 id="track-heading" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
+                Pista Interativa de Movimento
+            </h2>
+            <span id="txt-status-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200" role="status">
+                Aguardando início
+            </span>
+        </div>
+
+        <div class="relative w-full rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-inner" style="height: 220px;" id="track-viewport">
+            
+            <div id="origin-vertical-guide" class="absolute top-0 bottom-0 pointer-events-none border-l-2 border-emerald-500 border-dashed z-20 flex flex-col justify-start items-center">
+                <span class="bg-emerald-600 text-white font-black text-[9px] px-1 rounded shadow-sm">ZERO</span>
+            </div>
+
+            <!-- LANE A -->
+            <div class="absolute top-0 left-0 w-full h-[80px] pointer-events-none">
+                <span class="absolute top-2 left-3 text-[10px] font-extrabold text-blue-500 tracking-wider">FAIXA A</span>
+                <div id="entity-car-a" class="car-entity pointer-events-auto" style="top: 26px; left: 20%;" tabindex="0" aria-label="Carrinho A na faixa superior">
+                    <div class="car-badge bg-blue-600 text-white border-2 border-white shadow">A</div>
+                    <div class="w-full h-full relative" aria-hidden="true">
+                        <div class="absolute bottom-1 w-full h-4 bg-blue-600 rounded-md shadow-md"></div>
+                        <div class="absolute bottom-4 left-2 w-7 h-3 bg-blue-400 rounded-t-sm"></div>
+                        <div class="absolute bottom-5 left-3 w-5 h-2 bg-sky-200 rounded-t-sm opacity-90"></div>
+                        <div class="absolute -bottom-1 left-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-slate-300"></div>
+                        <div class="absolute -bottom-1 right-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-slate-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="absolute top-[82px] left-0 w-full border-t border-dashed border-slate-300 pointer-events-none z-0" aria-hidden="true"></div>
+
+            <!-- LANE B -->
+            <div class="absolute top-[84px] left-0 w-full h-[82px] pointer-events-none">
+                <span class="absolute top-2 left-3 text-[10px] font-extrabold text-red-500 tracking-wider">FAIXA B</span>
+                <div id="entity-car-b" class="car-entity pointer-events-auto" style="top: 26px; left: 60%;" tabindex="0" aria-label="Carrinho B na faixa inferior">
+                    <div class="car-badge bg-red-600 text-white border-2 border-white shadow">B</div>
+                    <div class="w-full h-full relative" aria-hidden="true">
+                        <div class="absolute bottom-1 w-full h-4 bg-red-600 rounded-md shadow-md"></div>
+                        <div class="absolute bottom-4 left-2 w-7 h-3 bg-red-400 rounded-t-sm"></div>
+                        <div class="absolute bottom-5 left-3 w-5 h-2 bg-rose-200 rounded-t-sm opacity-90"></div>
+                        <div class="absolute -bottom-1 left-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-slate-300"></div>
+                        <div class="absolute -bottom-1 right-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-slate-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ruler-strip" aria-hidden="true"></div>
+        </div>
+
+        <!-- Instant Telemetry Summary Bar (aria-live para leitura acessível sem poluição excessiva) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1" aria-live="polite" aria-atomic="true">
+            <div class="bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-600" aria-hidden="true"></span>
+                    <span class="text-xs font-black text-blue-900 uppercase">Telemetria A</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-blue-600 uppercase block">Posição S(t)</span>
+                        <span class="text-base font-black mono-num text-slate-800"><span id="telem-sa">0.00</span> <span class="lbl-dist-unit text-xs text-slate-500 font-bold">m</span></span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-blue-600 uppercase block">Velocidade V(t)</span>
+                        <span class="text-base font-black mono-num text-slate-800"><span id="telem-va">0.00</span> <span class="lbl-vel-unit text-xs text-slate-500 font-bold">m/s</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-red-50/70 border border-red-200 rounded-xl p-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-red-600" aria-hidden="true"></span>
+                    <span class="text-xs font-black text-red-900 uppercase">Telemetria B</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-red-600 uppercase block">Posição S(t)</span>
+                        <span class="text-base font-black mono-num text-slate-800"><span id="telem-sb">0.00</span> <span class="lbl-dist-unit text-xs text-slate-500 font-bold">m</span></span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-red-600 uppercase block">Velocidade V(t)</span>
+                        <span class="text-base font-black mono-num text-slate-800"><span id="telem-vb">0.00</span> <span class="lbl-vel-unit text-xs text-slate-500 font-bold">m/s</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Controls and Physics Parameters Section -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Carro A Controls Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 relative overflow-hidden" aria-labelledby="title-car-a">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-blue-600" aria-hidden="true"></div>
+            <div class="flex items-center justify-between">
+                <h2 id="title-car-a" class="text-base font-black text-slate-800 flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 rounded-md bg-blue-600" aria-hidden="true"></span>
+                    Parâmetros do Carrinho A
+                </h2>
+                <span class="text-[11px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Azul</span>
+            </div>
+
+            <!-- S0 parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-s0a">Posição Inicial (S₀) - Carro A</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-s0a" aria-label="Valor numérico da posição inicial do carro A" step="1" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-blue-700 focus:ring-2 focus:ring-blue-500">
+                        <span class="lbl-dist-unit text-slate-500 text-xs" aria-hidden="true">m</span>
+                    </div>
+                </div>
+                <input type="range" id="input-s0a" aria-label="Controle deslizante da posição inicial do carro A" class="slider-blue">
+            </div>
+
+            <!-- V0 parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-v0a">Velocidade Inicial (V₀) - Carro A</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-v0a" aria-label="Valor numérico da velocidade inicial do carro A" step="1" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-blue-700 focus:ring-2 focus:ring-blue-500">
+                        <span class="lbl-vel-unit text-slate-500 text-xs" aria-hidden="true">m/s</span>
+                    </div>
+                </div>
+                <input type="range" id="input-v0a" aria-label="Controle deslizante da velocidade inicial do carro A" class="slider-blue">
+            </div>
+
+            <!-- Acceleration parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-aa">Aceleração (a) - Carro A</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-aa" aria-label="Valor numérico da aceleração do carro A" step="0.5" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-blue-700 focus:ring-2 focus:ring-blue-500">
+                        <span class="lbl-acc-unit text-slate-500 text-xs" aria-hidden="true">m/s²</span>
+                    </div>
+                </div>
+                <input type="range" id="input-aa" aria-label="Controle deslizante da aceleração do carro A" class="slider-blue">
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+                <label for="select-mode-a" class="text-xs font-bold text-slate-600">Ao atingir V = 0 (Carro A):</label>
+                <select id="select-mode-a" aria-label="Comportamento do carro A ao atingir velocidade zero" class="text-xs font-bold bg-white border border-slate-300 rounded-lg py-1.5 px-2.5 outline-none text-slate-700 cursor-pointer focus:ring-2 focus:ring-blue-500">
+                    <option value="stop">Frear e Parar</option>
+                    <option value="reverse">Mudar de Sentido</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Carro B Controls Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 relative overflow-hidden" aria-labelledby="title-car-b">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-red-600" aria-hidden="true"></div>
+            <div class="flex items-center justify-between">
+                <h2 id="title-car-b" class="text-base font-black text-slate-800 flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 rounded-md bg-red-600" aria-hidden="true"></span>
+                    Parâmetros do Carrinho B
+                </h2>
+                <span class="text-[11px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded-full">Vermelho</span>
+            </div>
+
+            <!-- S0 parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-s0b">Posição Inicial (S₀) - Carro B</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-s0b" aria-label="Valor numérico da posição inicial do carro B" step="1" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-red-700 focus:ring-2 focus:ring-red-500">
+                        <span class="lbl-dist-unit text-slate-500 text-xs" aria-hidden="true">m</span>
+                    </div>
+                </div>
+                <input type="range" id="input-s0b" aria-label="Controle deslizante da posição inicial do carro B" class="slider-red">
+            </div>
+
+            <!-- V0 parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-v0b">Velocidade Inicial (V₀) - Carro B</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-v0b" aria-label="Valor numérico da velocidade inicial do carro B" step="1" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-red-700 focus:ring-2 focus:ring-red-500">
+                        <span class="lbl-vel-unit text-slate-500 text-xs" aria-hidden="true">m/s</span>
+                    </div>
+                </div>
+                <input type="range" id="input-v0b" aria-label="Controle deslizante da velocidade inicial do carro B" class="slider-red">
+            </div>
+
+            <!-- Acceleration parameter -->
+            <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                    <label for="num-ab">Aceleração (a) - Carro B</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="num-ab" aria-label="Valor numérico da aceleração do carro B" step="0.5" class="w-16 px-1.5 py-0.5 text-right font-black mono-num bg-white border border-slate-300 rounded text-red-700 focus:ring-2 focus:ring-red-500">
+                        <span class="lbl-acc-unit text-slate-500 text-xs" aria-hidden="true">m/s²</span>
+                    </div>
+                </div>
+                <input type="range" id="input-ab" aria-label="Controle deslizante da aceleração do carro B" class="slider-red">
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+                <label for="select-mode-b" class="text-xs font-bold text-slate-600">Ao atingir V = 0 (Carro B):</label>
+                <select id="select-mode-b" aria-label="Comportamento do carro B ao atingir velocidade zero" class="text-xs font-bold bg-white border border-slate-300 rounded-lg py-1.5 px-2.5 outline-none text-slate-700 cursor-pointer focus:ring-2 focus:ring-red-500">
+                    <option value="stop">Frear e Parar</option>
+                    <option value="reverse">Mudar de Sentido</option>
+                </select>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- Synchronized Real-time Charts Section -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4" aria-labelledby="title-charts">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 id="title-charts" class="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                Gráficos Cinemáticos Sincronizados
+            </h3>
+            <div class="flex items-center gap-4 text-xs font-bold">
+                <span class="flex items-center gap-1.5 text-blue-600"><span class="w-3 h-1 bg-blue-600 rounded" aria-hidden="true"></span> Carro A</span>
+                <span class="flex items-center gap-1.5 text-red-600"><span class="w-3 h-1 bg-red-600 rounded" aria-hidden="true"></span> Carro B</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col">
+                <span id="title-chart-s" class="text-xs font-bold text-slate-600 text-center mb-1">Posição (S) x Tempo (t)</span>
+                <div class="relative w-full h-48">
+                    <canvas id="canvas-sxt" aria-label="Gráfico de Posição x Tempo" role="img"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col">
+                <span id="title-chart-v" class="text-xs font-bold text-slate-600 text-center mb-1">Velocidade (V) x Tempo (t)</span>
+                <div class="relative w-full h-48">
+                    <canvas id="canvas-vxt" aria-label="Gráfico de Velocidade x Tempo" role="img"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col">
+                <span id="title-chart-a" class="text-xs font-bold text-slate-600 text-center mb-1">Aceleração (a) x Tempo (t)</span>
+                <div class="relative w-full h-48">
+                    <canvas id="canvas-axt" aria-label="Gráfico de Aceleração x Tempo" role="img"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+    const UNITS_CONFIG = {
+        si: {
+            dist: 'm',
+            time: 's',
+            vel: 'm/s',
+            acc: 'm/s²',
+            limits: {
+                s: { min: -500, max: 500, step: 1, defaultA: 0, defaultB: 100 },
+                v: { min: -100, max: 100, step: 1, defaultA: 20, defaultB: -20 },
+                a: { min: -25, max: 25, step: 0.5, defaultA: -4, defaultB: 4 },
+                minSpan: 80
+            },
+            timeStep: 0.1
+        },
+        kmh: {
+            dist: 'km',
+            time: 'h',
+            vel: 'km/h',
+            acc: 'km/h²',
+            limits: {
+                s: { min: -50, max: 50, step: 0.1, defaultA: 0, defaultB: 10 },
+                v: { min: -200, max: 200, step: 1, defaultA: 70, defaultB: -70 },
+                a: { min: -40000, max: 40000, step: 500, defaultA: -20000, defaultB: 20000 },
+                minSpan: 5
+            },
+            timeStep: 0.005
+        }
+    };
+
+    let currentUnit = 'si';
+    let isRunning = false;
+    let simTime = 0.0;
+    let maxTime = null;
+    let animFrameId = null;
+    let lastFrameTimestamp = null;
+
+    let camera = { min: -20, max: 120 };
+
+    let carA = { s0: 0, v0: 20, a: -4, mode: 'stop', s: 0, v: 20, current_a: -4, stopped: false };
+    let carB = { s0: 100, v0: -20, a: 4, mode: 'stop', s: 100, v: -20, current_a: 4, stopped: false };
+
+    const DOM = {
+        selectUnits: document.getElementById('select-units'),
+        btnPlay: document.getElementById('btn-play'),
+        btnReset: document.getElementById('btn-reset'),
+        inputCurrentTime: document.getElementById('input-current-time'),
+        inputMaxTime: document.getElementById('input-max-time'),
+        statusBadge: document.getElementById('txt-status-badge'),
+        trackViewport: document.getElementById('track-viewport'),
+        rulerStrip: document.getElementById('ruler-strip'),
+        originGuide: document.getElementById('origin-vertical-guide'),
+        carAEntity: document.getElementById('entity-car-a'),
+        carBEntity: document.getElementById('entity-car-b'),
+        telemSA: document.getElementById('telem-sa'),
+        telemVA: document.getElementById('telem-va'),
+        telemSB: document.getElementById('telem-sb'),
+        telemVB: document.getElementById('telem-vb'),
+        inputS0A: document.getElementById('input-s0a'),
+        numS0A: document.getElementById('num-s0a'),
+        inputV0A: document.getElementById('input-v0a'),
+        numV0A: document.getElementById('num-v0a'),
+        inputAA: document.getElementById('input-aa'),
+        numAA: document.getElementById('num-aa'),
+        modeA: document.getElementById('select-mode-a'),
+        inputS0B: document.getElementById('input-s0b'),
+        numS0B: document.getElementById('num-s0b'),
+        inputV0B: document.getElementById('input-v0b'),
+        numV0B: document.getElementById('num-v0b'),
+        inputAB: document.getElementById('input-ab'),
+        numAB: document.getElementById('num-ab'),
+        modeB: document.getElementById('select-mode-b'),
+        titleChartS: document.getElementById('title-chart-s'),
+        titleChartV: document.getElementById('title-chart-v'),
+        titleChartA: document.getElementById('title-chart-a'),
+        canvasS: document.getElementById('canvas-sxt'),
+        canvasV: document.getElementById('canvas-vxt'),
+        canvasA: document.getElementById('canvas-axt')
+    };
+
+    let chartS = null, chartV = null, chartA = null;
+
+    function initCharts() {
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                elements: {
+                    point: { radius: 0, hitRadius: 6 },
+                    line: { tension: 0.15, borderWidth: 2.5 }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        suggestedMax: 10,
+                        grid: { color: '#e2e8f0' },
+                        ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+                    },
+                    y: {
+                        grid: { color: '#e2e8f0' },
+                        ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        padding: 8,
+                        cornerRadius: 8,
+                        titleFont: { family: 'Inter', size: 11, weight: 'bold' },
+                        bodyFont: { family: 'JetBrains Mono', size: 11 }
+                    }
+                }
+            }
+        };
+
+        const cloneConfig = () => JSON.parse(JSON.stringify(chartConfig));
+        const datasetsBlueprint = [
+            { label: 'Carro A', borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.05)', data: [] },
+            { label: 'Carro B', borderColor: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.05)', data: [] }
+        ];
+
+        const cfgS = cloneConfig(); cfgS.data = { datasets: JSON.parse(JSON.stringify(datasetsBlueprint)) };
+        chartS = new Chart(DOM.canvasS.getContext('2d'), cfgS);
+
+        const cfgV = cloneConfig(); cfgV.data = { datasets: JSON.parse(JSON.stringify(datasetsBlueprint)) };
+        chartV = new Chart(DOM.canvasV.getContext('2d'), cfgV);
+
+        const cfgA = cloneConfig(); cfgA.data = { datasets: JSON.parse(JSON.stringify(datasetsBlueprint)) };
+        chartA = new Chart(DOM.canvasA.getContext('2d'), cfgA);
+    }
+
+    function calculateCarKinematics(car, t) {
+        let s = car.s0, v = car.v0, a = car.a, stopped = false;
+        if (car.mode === 'stop' && (car.v0 * car.a < 0)) {
+            const tStop = -car.v0 / car.a;
+            if (t >= tStop) {
+                s = car.s0 + (car.v0 * tStop) + (0.5 * car.a * tStop * tStop);
+                v = 0; a = 0; stopped = true;
+            } else {
+                s = car.s0 + (car.v0 * t) + (0.5 * car.a * t * t);
+                v = car.v0 + (car.a * t);
+            }
+        } else {
+            s = car.s0 + (car.v0 * t) + (0.5 * car.a * t * t);
+            v = car.v0 + (car.a * t);
+        }
+        return { s, v, a, stopped };
+    }
+
+    function computeReverseInitialPosition(car, targetS, t) {
+        if (t <= 0.0001) return targetS;
+        const backupS0 = car.s0;
+        car.s0 = 0;
+        const displacement = calculateCarKinematics(car, t).s;
+        car.s0 = backupS0;
+        return targetS - displacement;
+    }
+
+    function updateCameraBounds(forceReset = false) {
+        const minPos = Math.min(0, carA.s, carB.s);
+        const maxPos = Math.max(0, carA.s, carB.s);
+        const span = maxPos - minPos;
+        const minAllowedSpan = UNITS_CONFIG[currentUnit].limits.minSpan;
+
+        if (forceReset) {
+            const newSpan = Math.max(span * 1.5, minAllowedSpan);
+            const center = (minPos + maxPos) / 2;
+            camera.min = center - newSpan / 2;
+            camera.max = center + newSpan / 2;
+            if (camera.min > 0) camera.min = -newSpan * 0.15;
+            if (camera.max < 0) camera.max = newSpan * 0.15;
+            renderRuler();
+            return;
+        }
+
+        const currentRange = camera.max - camera.min;
+        const padding = currentRange * 0.12;
+        if (minPos < camera.min + padding || maxPos > camera.max - padding) {
+            const targetRange = Math.max(currentRange * 1.25, (maxPos - minPos) + padding * 3);
+            const center = (minPos + maxPos) / 2;
+            camera.min = center - targetRange / 2;
+            camera.max = center + targetRange / 2;
+            if (camera.min > 0) camera.min = -targetRange * 0.15;
+            if (camera.max < 0) camera.max = targetRange * 0.15;
+            renderRuler();
+        }
+    }
+
+    function renderRuler() {
+        const range = camera.max - camera.min;
+        if (range <= 0 || isNaN(range)) return;
+        const rawStep = range / 8;
+        const exponent = Math.floor(Math.log10(rawStep));
+        const fraction = rawStep / Math.pow(10, exponent);
+        let niceFactor = 1;
+        if (fraction >= 1.5 && fraction < 3.5) niceFactor = 2;
+        else if (fraction >= 3.5 && fraction < 7.5) niceFactor = 5;
+        else if (fraction >= 7.5) niceFactor = 10;
+        
+        const step = Math.max(niceFactor * Math.pow(10, exponent), 0.00001);
+        const startTickIndex = Math.floor(camera.min / step);
+        const endTickIndex = Math.ceil(camera.max / step);
+        const unitLabel = UNITS_CONFIG[currentUnit].dist;
+
+        let rulerHTML = '';
+        for (let i = startTickIndex; i <= endTickIndex; i++) {
+            let tickVal = parseFloat((i * step).toFixed(6));
+            if (tickVal >= camera.min - step && tickVal <= camera.max + step) {
+                const percent = ((tickVal - camera.min) / range) * 100;
+                if (percent >= 0 && percent <= 100) {
+                    const isZero = Math.abs(tickVal) < 1e-6;
+                    const tickClass = isZero ? 'ruler-tick zero-tick' : 'ruler-tick major';
+                    const labelClass = isZero ? 'ruler-label zero-label' : 'ruler-label';
+                    const displayText = isZero ? `0 ${unitLabel}` : `${tickVal} ${unitLabel}`;
+                    rulerHTML += `<div class="${tickClass}" style="left: ${percent}%;"></div><div class="${labelClass}" style="left: ${percent}%;">${displayText}</div>`;
+                }
+            }
+        }
+        DOM.rulerStrip.innerHTML = rulerHTML;
+
+        const zeroPercent = ((0 - camera.min) / range) * 100;
+        if (zeroPercent >= 0 && zeroPercent <= 100) {
+            DOM.originGuide.style.display = 'flex';
+            DOM.originGuide.style.left = `${zeroPercent}%`;
+        } else {
+            DOM.originGuide.style.display = 'none';
+        }
+    }
+
+    function updateScenePositions() {
+        const stateA = calculateCarKinematics(carA, simTime);
+        carA.s = stateA.s; carA.v = stateA.v; carA.current_a = stateA.a; carA.stopped = stateA.stopped;
+
+        const stateB = calculateCarKinematics(carB, simTime);
+        carB.s = stateB.s; carB.v = stateB.v; carB.current_a = stateB.a; carB.stopped = stateB.stopped;
+
+        updateCameraBounds(false);
+
+        const range = camera.max - camera.min;
+        const pctA = ((carA.s - camera.min) / range) * 100;
+        const pctB = ((carB.s - camera.min) / range) * 100;
+
+        DOM.carAEntity.style.left = `${pctA}%`;
+        DOM.carBEntity.style.left = `${pctB}%`;
+
+        DOM.telemSA.innerText = carA.s.toFixed(2);
+        DOM.telemVA.innerText = carA.v.toFixed(2);
+        DOM.telemSB.innerText = carB.s.toFixed(2);
+        DOM.telemVB.innerText = carB.v.toFixed(2);
+        DOM.inputCurrentTime.value = simTime.toFixed(simTime >= 10 ? 1 : 2);
+    }
+
+    function rebuildChartsHistory() {
+        if (!chartS || !chartV || !chartA) return;
+        [chartS, chartV, chartA].forEach(chart => {
+            chart.data.datasets[0].data = [];
+            chart.data.datasets[1].data = [];
+        });
+
+        const sampleSteps = 120;
+        const dt = simTime > 0 ? (simTime / sampleSteps) : 0.1;
+        for (let t = 0; t <= simTime; t += dt) {
+            const a = calculateCarKinematics(carA, t);
+            const b = calculateCarKinematics(carB, t);
+            chartS.data.datasets[0].data.push({ x: t, y: a.s });
+            chartS.data.datasets[1].data.push({ x: t, y: b.s });
+            chartV.data.datasets[0].data.push({ x: t, y: a.v });
+            chartV.data.datasets[1].data.push({ x: t, y: b.v });
+            chartA.data.datasets[0].data.push({ x: t, y: a.a });
+            chartA.data.datasets[1].data.push({ x: t, y: b.a });
+        }
+
+        const finalA = calculateCarKinematics(carA, simTime);
+        const finalB = calculateCarKinematics(carB, simTime);
+        chartS.data.datasets[0].data.push({ x: simTime, y: finalA.s });
+        chartS.data.datasets[1].data.push({ x: simTime, y: finalB.s });
+        chartV.data.datasets[0].data.push({ x: simTime, y: finalA.v });
+        chartV.data.datasets[1].data.push({ x: simTime, y: finalB.v });
+        chartA.data.datasets[0].data.push({ x: simTime, y: finalA.a });
+        chartA.data.datasets[1].data.push({ x: simTime, y: finalB.a });
+
+        const suggestedMaxX = Math.max(10, simTime * 1.1);
+        [chartS, chartV, chartA].forEach(chart => {
+            chart.options.scales.x.suggestedMax = suggestedMaxX;
+            chart.update();
+        });
+    }
+
+    function updateUnitLabels() {
+        const u = UNITS_CONFIG[currentUnit];
+        document.querySelectorAll('.lbl-dist-unit').forEach(el => el.innerText = u.dist);
+        document.querySelectorAll('.lbl-time-unit').forEach(el => el.innerText = u.time);
+        document.querySelectorAll('.lbl-vel-unit').forEach(el => el.innerText = u.vel);
+        document.querySelectorAll('.lbl-acc-unit').forEach(el => el.innerText = u.acc);
+        DOM.titleChartS.innerText = `Posição (${u.dist}) x Tempo (${u.time})`;
+        DOM.titleChartV.innerText = `Velocidade (${u.vel}) x Tempo (${u.time})`;
+        DOM.titleChartA.innerText = `Aceleração (${u.acc}) x Tempo (${u.time})`;
+    }
+
+    function applyUnitLimitsToSliders() {
+        const limits = UNITS_CONFIG[currentUnit].limits;
+        ['A', 'B'].forEach(car => {
+            const suffix = car;
+            DOM[`inputS0${suffix}`].min = limits.s.min; DOM[`inputS0${suffix}`].max = limits.s.max; DOM[`inputS0${suffix}`].step = limits.s.step;
+            DOM[`numS0${suffix}`].min = limits.s.min; DOM[`numS0${suffix}`].max = limits.s.max; DOM[`numS0${suffix}`].step = limits.s.step;
+
+            DOM[`inputV0${suffix}`].min = limits.v.min; DOM[`inputV0${suffix}`].max = limits.v.max; DOM[`inputV0${suffix}`].step = limits.v.step;
+            DOM[`numV0${suffix}`].min = limits.v.min; DOM[`numV0${suffix}`].max = limits.v.max; DOM[`numV0${suffix}`].step = limits.v.step;
+
+            DOM[`inputA${suffix}`].min = limits.a.min; DOM[`inputA${suffix}`].max = limits.a.max; DOM[`inputA${suffix}`].step = limits.a.step;
+            DOM[`numA${suffix}`].min = limits.a.min; DOM[`numA${suffix}`].max = limits.a.max; DOM[`numA${suffix}`].step = limits.a.step;
+        });
+    }
+
+    function handleUnitSwitch(newUnit) {
+        if (newUnit === currentUnit) return;
+        const oldUnit = currentUnit;
+        currentUnit = newUnit;
+
+        if (oldUnit === 'si' && newUnit === 'kmh') {
+            carA.s0 /= 1000; carB.s0 /= 1000;
+            carA.v0 *= 3.6; carB.v0 *= 3.6;
+            carA.a *= 12960; carB.a *= 12960;
+            simTime /= 3600; if (maxTime !== null) maxTime /= 3600;
+        } else if (oldUnit === 'kmh' && newUnit === 'si') {
+            carA.s0 *= 1000; carB.s0 *= 1000;
+            carA.v0 /= 3.6; carB.v0 /= 3.6;
+            carA.a /= 12960; carB.a /= 12960;
+            simTime *= 3600; if (maxTime !== null) maxTime *= 3600;
+        }
+
+        updateUnitLabels();
+        applyUnitLimitsToSliders();
+        syncStateToInputElements();
+        if (maxTime !== null) DOM.inputMaxTime.value = maxTime;
+
+        updateCameraBounds(true);
+        updateScenePositions();
+        rebuildChartsHistory();
+        DOM.statusBadge.innerText = `Unidade alterada para ${currentUnit.toUpperCase()}`;
+    }
+
+    function syncStateToInputElements() {
+        DOM.inputS0A.value = carA.s0; DOM.numS0A.value = carA.s0;
+        DOM.inputV0A.value = carA.v0; DOM.numV0A.value = carA.v0;
+        DOM.inputAA.value = carA.a; DOM.numAA.value = carA.a;
+        DOM.modeA.value = carA.mode;
+
+        DOM.inputS0B.value = carB.s0; DOM.numS0B.value = carB.s0;
+        DOM.inputV0B.value = carB.v0; DOM.numV0B.value = carB.v0;
+        DOM.inputAB.value = carB.a; DOM.numAB.value = carB.a;
+        DOM.modeB.value = carB.mode;
+    }
+
+    function readInputsToState() {
+        carA.s0 = parseFloat(DOM.numS0A.value) || 0;
+        carA.v0 = parseFloat(DOM.numV0A.value) || 0;
+        carA.a = parseFloat(DOM.numAA.value) || 0;
+        carA.mode = DOM.modeA.value;
+
+        carB.s0 = parseFloat(DOM.numS0B.value) || 0;
+        carB.v0 = parseFloat(DOM.numV0B.value) || 0;
+        carB.a = parseFloat(DOM.numAB.value) || 0;
+        carB.mode = DOM.modeB.value;
+
+        DOM.inputS0A.value = carA.s0; DOM.inputV0A.value = carA.v0; DOM.inputAA.value = carA.a;
+        DOM.inputS0B.value = carB.s0; DOM.inputV0B.value = carB.v0; DOM.inputAB.value = carB.a;
+
+        updateScenePositions();
+        rebuildChartsHistory();
+    }
+
+    function bindDualInput(rangeEl, numEl, setterCallback) {
+        rangeEl.addEventListener('input', (e) => {
+            numEl.value = e.target.value;
+            setterCallback(parseFloat(e.target.value));
+            readInputsToState();
+        });
+        numEl.addEventListener('input', (e) => {
+            rangeEl.value = e.target.value;
+            setterCallback(parseFloat(e.target.value));
+            readInputsToState();
+        });
+    }
+
+    function setPlayState(play) {
+        isRunning = play;
+        if (isRunning) {
+            if (maxTime !== null && simTime >= maxTime) {
+                resetSimulation(false);
+                isRunning = true;
+            } else if (carA.stopped && carB.stopped && (carA.v0 !== 0 || carB.v0 !== 0)) {
+                resetSimulation(false);
+                isRunning = true;
+            }
+            DOM.btnPlay.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg><span>⏸ Pausar</span>`;
+            DOM.btnPlay.className = "h-11 px-5 rounded-xl font-black text-sm text-white bg-amber-500 hover:bg-amber-600 focus:ring-4 focus:ring-amber-300 transition-all flex items-center gap-2";
+            DOM.statusBadge.innerText = 'Simulação em execução...';
+            lastFrameTimestamp = performance.now();
+            if (!animFrameId) animFrameId = requestAnimationFrame(simulationEngineLoop);
+        } else {
+            DOM.btnPlay.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg><span>▶ Iniciar</span>`;
+            DOM.btnPlay.className = "h-11 px-5 rounded-xl font-black text-sm text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-all flex items-center gap-2";
+            DOM.statusBadge.innerText = 'Simulação pausada.';
+            if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+        }
+    }
+
+    function resetSimulation(resetToInitialDefaults = false) {
+        setPlayState(false);
+        simTime = 0.0;
+        DOM.inputCurrentTime.value = "0.0";
+        if (resetToInitialDefaults) {
+            const defs = UNITS_CONFIG[currentUnit].limits;
+            carA.s0 = defs.s.defaultA; carA.v0 = defs.v.defaultA; carA.a = defs.a.defaultA;
+            carB.s0 = defs.s.defaultB; carB.v0 = defs.v.defaultB; carB.a = defs.a.defaultB;
+            syncStateToInputElements();
+        }
+        readInputsToState();
+        updateCameraBounds(true);
+        updateScenePositions();
+        rebuildChartsHistory();
+        DOM.statusBadge.innerText = 'Simulação reiniciada.';
+    }
+
+    function simulationEngineLoop(timestamp) {
+        if (!isRunning) return;
+        if (!lastFrameTimestamp) lastFrameTimestamp = timestamp;
+        const deltaSeconds = (timestamp - lastFrameTimestamp) / 1000;
+        lastFrameTimestamp = timestamp;
+
+        const simTimeDelta = currentUnit === 'kmh' ? (deltaSeconds * 0.05) : deltaSeconds;
+        simTime += simTimeDelta;
+
+        if (maxTime !== null && simTime >= maxTime) {
+            simTime = maxTime;
+            updateScenePositions();
+            rebuildChartsHistory();
+            setPlayState(false);
+            DOM.statusBadge.innerText = 'Duração máxima atingida.';
+            return;
+        }
+
+        updateScenePositions();
+
+        const lastDataPoint = chartS.data.datasets[0].data.slice(-1)[0];
+        const interval = currentUnit === 'kmh' ? 0.02 : 0.08;
+        if (!lastDataPoint || (simTime - lastDataPoint.x) >= interval) {
+            chartS.data.datasets[0].data.push({ x: simTime, y: carA.s });
+            chartS.data.datasets[1].data.push({ x: simTime, y: carB.s });
+            chartV.data.datasets[0].data.push({ x: simTime, y: carA.v });
+            chartV.data.datasets[1].data.push({ x: simTime, y: carB.v });
+            chartA.data.datasets[0].data.push({ x: simTime, y: carA.current_a });
+            chartA.data.datasets[1].data.push({ x: simTime, y: carB.current_a });
+            [chartS, chartV, chartA].forEach(c => c.update());
+        }
+
+        if (carA.stopped && carB.stopped && (carA.v0 !== 0 || carB.v0 !== 0)) {
+            setPlayState(false);
+            DOM.statusBadge.innerText = 'Ambos os veículos pararam.';
+            return;
+        }
+        animFrameId = requestAnimationFrame(simulationEngineLoop);
+    }
+
+    function bindAllEventListeners() {
+        DOM.selectUnits.addEventListener('change', (e) => handleUnitSwitch(e.target.value));
+        DOM.btnPlay.addEventListener('click', () => setPlayState(!isRunning));
+        DOM.btnReset.addEventListener('click', () => resetSimulation(false));
+
+        DOM.inputCurrentTime.addEventListener('change', (e) => {
+            if (isRunning) setPlayState(false);
+            let val = parseFloat(e.target.value);
+            simTime = (!isNaN(val) && val >= 0) ? val : 0;
+            updateScenePositions();
+            rebuildChartsHistory();
+            DOM.statusBadge.innerText = `Tempo transportado para ${simTime.toFixed(2)}${UNITS_CONFIG[currentUnit].time}`;
+        });
+
+        DOM.inputMaxTime.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            maxTime = (!isNaN(val) && val > 0) ? val : null;
+        });
+
+        bindDualInput(DOM.inputS0A, DOM.numS0A, (v) => carA.s0 = v);
+        bindDualInput(DOM.inputV0A, DOM.numV0A, (v) => carA.v0 = v);
+        bindDualInput(DOM.inputAA, DOM.numAA, (v) => carA.a = v);
+        DOM.modeA.addEventListener('change', (e) => { carA.mode = e.target.value; readInputsToState(); });
+
+        bindDualInput(DOM.inputS0B, DOM.numS0B, (v) => carB.s0 = v);
+        bindDualInput(DOM.inputV0B, DOM.numV0B, (v) => carB.v0 = v);
+        bindDualInput(DOM.inputAB, DOM.numAB, (v) => carB.a = v);
+        DOM.modeB.addEventListener('change', (e) => { carB.mode = e.target.value; readInputsToState(); });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        initCharts();
+        updateUnitLabels();
+        applyUnitLimitsToSliders();
+        syncStateToInputElements();
+        bindAllEventListeners();
+        resetSimulation(true);
+    });
+</script>
+</body>
+</html>
